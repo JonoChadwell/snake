@@ -10,8 +10,12 @@ def test_supercellerate():
     assert supercellerate([(0,0), (1,0), (2,0)]) == [((0,0), [(1,0), (0,0)]), ((2,0), [(2,0)])]
 
 def test_find_path_to_goal():
-    assert find_path_to_goal(10, 10, [(0,0), (2,0)], (8,0)) \
+    assert list(find_path_to_goal(10, 10, [(0,0), (2,0)], (8,0))) \
             == [(0,0), (2,0), (4,0), (6,0), (8,0)]
+    assert list(find_path_to_goal(10, 10, [(0,2), (2,2)], (0,0))) \
+            == [(0,2), (2,2), (2,0), (0,0)]
+    assert list(find_path_to_goal(10, 10, [(0,2), (2,2)], (0,0), (0,2))) \
+            == [(0,2), (0,0)]
 
 def test_update_path():
     assert list(update_path(10, 10, deque([(0,0), (2,0)]), (8,0))) \
@@ -27,26 +31,26 @@ def test_clockwise_rotate():
 
 def test_path_valid():
     with pytest.raises(AssertionError):
-        assert_path_valid(1,1, deque([]))
+        assert_path_valid(1,1, deque([]), skip=False)
 
     with pytest.raises(AssertionError):
-        assert_path_valid(10,10, [(0,0)])
+        assert_path_valid(10,10, [(0,0)], skip=False)
 
-    assert_path_valid(10,10, deque([(0,0)]))
-    assert_path_valid(10,10, deque([(0,0), (0,2), (0,4), (0,2)]))
-
-    with pytest.raises(AssertionError):
-        assert_path_valid(10,10, deque([(0,0), (0,2), (-2,2)]))
+    assert_path_valid(10,10, deque([(0,0)]), skip=False)
+    assert_path_valid(10,10, deque([(0,0), (0,2), (0,4), (0,2)]), skip=False)
 
     with pytest.raises(AssertionError):
-        assert_path_valid(10,10, deque([(0,0), (0,2), (0,2)]))
+        assert_path_valid(10,10, deque([(0,0), (0,2), (-2,2)]), skip=False)
 
     with pytest.raises(AssertionError):
-        assert_path_valid(10,10, deque([(0,0), (0,2), (0,6)]))
+        assert_path_valid(10,10, deque([(0,0), (0,2), (0,2)]), skip=False)
 
-    assert_path_valid(8,8, deque([(0,0), (0,2), (0,4), (0,6), (0,4), (0,2)]))
     with pytest.raises(AssertionError):
-        assert_path_valid(6,6, deque([(0,0), (0,2), (0,4), (0,6), (0,4), (0,2)]))
+        assert_path_valid(10,10, deque([(0,0), (0,2), (0,6)]), skip=False)
+
+    assert_path_valid(8,8, deque([(0,0), (0,2), (0,4), (0,6), (0,4), (0,2)]), skip=False)
+    with pytest.raises(AssertionError):
+        assert_path_valid(6,6, deque([(0,0), (0,2), (0,4), (0,6), (0,4), (0,2)]), skip=False)
 
 def test_clockwise_reachable():
     assert set(clockwise_reachable([(2,0), (2,2), (2,4), (2,2)], 1)) == {(4,2)}
@@ -54,6 +58,17 @@ def test_clockwise_reachable():
     assert set(clockwise_reachable([(4,4)], 0)) == {(4,6), (4,2), (2,4), (6,4)}
     assert set(clockwise_reachable([(2,4), (2,2), (2,4), (2,6)], 1)) == {(0,2), (2,0), (4,2)}
     assert set(clockwise_reachable([(2,2), (2,4)], 0)) == {(0,2), (2,0), (4,2)}
+
+def test_find_discardable():
+    # assert set(find_discardable(deque([(0,0)]), set())) == set()
+    # assert set(find_discardable(deque([(0,0)]), set())) == set()
+
+    start = deque([(0,0), (2,0), (4,0), (2,0), (0,0), (0,2)])
+    # assert set(find_discardable(start, {(0,0), (4,0)})) == set()
+    assert set(find_discardable(start, {(0,0)})) == {1,2,3,4}
+
+    # start = deque([(0,0), (2,0), (4,0), (2,0), (2,2), (2,4), (2,2), (2,0), (0,0), (0,2)])
+    # assert reduce_path(start, deque([(0,0), (1,0)]), (0,0)) == deque([(0,0), (0,2)])
 
 def test_reduce_path():
     start = deque([(0,0)])

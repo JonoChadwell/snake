@@ -46,7 +46,7 @@ WINDOW_HEIGHT = 800
 GAME_WIDTH = 30
 GAME_HEIGHT = 30
 
-DELAY = 2
+DELAY = 80
 
 ###############################################################################
 
@@ -128,15 +128,15 @@ running = True
 printed_result = False
 last_tick = 0
 
+snake_game.render(screen, WINDOW_WIDTH, WINDOW_HEIGHT)
+pygame.display.flip()
+
 while snake_game.get_state() == Snake.PLAYING:
     snake_game.advance(ai_supercellerator_v1(snake_game))
     if snake_game.get_state() == Snake.WON:
         print('Victory in ' + str(snake_game.get_moves()) + ' moves!')
     elif snake_game.get_state() == Snake.DIED:
         print('Snake died')
-
-# snake_game.render(screen, WINDOW_WIDTH, WINDOW_HEIGHT)
-# pygame.display.flip()
 
 # while running:
 #     for event in pygame.event.get():
@@ -159,4 +159,4 @@ while snake_game.get_state() == Snake.PLAYING:
 #     snake_game.render(screen, WINDOW_WIDTH, WINDOW_HEIGHT)
 #     pygame.display.flip()
 
-# pygame.quit()
+pygame.quit()

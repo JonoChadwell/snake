@@ -72,7 +72,11 @@ def clockwise_step(start, next):
 def clockwise_rotate(value):
     return (-value[1], value[0])
 
-def assert_path_valid(width, height, path):
+def assert_path_valid(width, height, path, *, skip=True):
+    """Checks that a path is valid. The default of |skip| may be adjusted to
+    improve program runtime if safety checks are not desired.
+    """
+    if skip: return
     assert not (width % 2) and not (height % 2)
     assert isinstance(path, deque)
     for cell in path:
@@ -106,7 +110,7 @@ def clockwise_reachable(path, idx):
         attempt = clockwise_rotate(attempt)
     return map(lambda x: common.add_elements(current, x), possible)
 
-def find_path_to_goal(width, height, old_path, goal):
+def find_path_to_goal(width, height, old_path, goal, head_pos=None):
     assert not (width % 2) and not (height % 2)
 
     goal_cell = supercell(goal)
@@ -118,6 +122,8 @@ def find_path_to_goal(width, height, old_path, goal):
         def __init__(self, steps):
             self.steps = steps
 
+    # TODO: reduce "blocked" to exclude cells that will be left before they
+    # could possibly be reached.
     already_contained = False
     for cell in old_path:
         blocked.add(cell)
@@ -126,20 +132,29 @@ def find_path_to_goal(width, height, old_path, goal):
     assert not already_contained
 
     def list_adjacent(state):
-        unfiltered = None
-        if isinstance(state, Forward):
-            if state.steps == 0:
-                #TODO improve this
-                return [Forward(1)]
+        def test_position(x):
+            return x not in blocked and common.in_bounds(x, (width, height))
 
-            in_path = []
+        if isinstance(state, Forward):
             if state.steps + 1 < len(old_path):
-                in_path.append(Forward(state.steps + 1))
-            return itertools.chain(in_path, 
-                    filter(lambda x: x not in blocked and common.in_bounds(x, (width, height)),
-                        clockwise_reachable(old_path, state.steps)))
-            
-        return filter(lambda x: x not in blocked and common.in_bounds(x, (width, height)), [
+                yield Forward(state.steps + 1)
+
+            if state.steps == 0:
+                if head_pos is None:
+                    return
+                pos = head_pos
+                end = old_path[1 % len(old_path)]
+                while (out_cell := common.add_elements(supercell(CLOCKWISE_OUT_TABLE[subcell(pos)]),
+                            supercell(pos))) != end:
+                    if test_position(out_cell):
+                        yield out_cell
+                    pos = common.add_elements(CLOCKWISE_IN_TABLE[subcell(pos)], supercell(pos))
+                return
+
+            yield from filter(test_position, clockwise_reachable(old_path, state.steps))
+            return
+
+        yield from filter(test_position, [
             common.add_elements(state, (2,0)),
             common.add_elements(state, (-2,0)),
             common.add_elements(state, (0,2)),
@@ -160,7 +175,7 @@ def add_to_path(old_path, additions, idx):
     """
 
     sliceable = list(old_path)
-    assert 0 < idx and idx < len(old_path)
+    assert 0 <= idx and idx < len(old_path)
     assert sliceable[idx] == additions[0]
     assert additions[1] in clockwise_reachable(old_path, idx)
 
@@ -172,9 +187,9 @@ def add_to_path(old_path, additions, idx):
 
     return new_path
 
-def update_path(width, height, old_path, goal):
+def update_path(width, height, old_path, goal, head_pos=None):
     assert_path_valid(width, height, old_path)
-    path_to_goal = find_path_to_goal(width, height, old_path, goal)
+    path_to_goal = find_path_to_goal(width, height, old_path, goal, head_pos)
 
     idx = 0
     while idx < len(old_path) and old_path[idx] == path_to_goal[idx]:
@@ -185,36 +200,38 @@ def update_path(width, height, old_path, goal):
     assert_path_valid(width, height, new_path)
     return new_path
 
+def find_discardable(path, keep):
+    """Returns an iterable of indicies that can be removed from a path without
+    removing any tiles from |keep|.
+    """
+    stack = []
+    for idx, location in enumerate(path):
+        if len(stack) >= 2 and stack[-2][0] == location:
+            yield stack.pop()[1]
+            yield idx
+            continue
+        if location in keep:
+            stack.clear()
+        stack.append((location, idx))
+
 def reduce_path(path, snake, goal):
     occupied = set()
 
     for location in snake:
         occupied.add(supercell(location))
+    occupied.add(supercell(goal))
+
+    drop = set()
+    drop.update(find_discardable(path, occupied))
+
+    if not drop:
+        return path
     
-    cell = None
-    back_one = None
-    back_two = None
-    new_path = deque()
-    found = False
-    for cell in path:
-
-        if back_two is not None and cell == back_two:
-            if back_one not in occupied and back_one != goal:
-                back_one = None
-                back_two = None
-                found = True
-
-        if back_two is not None:
-            new_path.append(back_two)
-        back_two = back_one
-        back_one = cell
-    
-    if back_two is not None:
-        new_path.append(back_two)
-    new_path.append(cell)
-
-    return reduce_path(new_path, snake, goal) if found else path
-
+    return deque(map(
+        lambda x: x[1],
+        filter(
+            lambda x: x[0] not in drop,
+            enumerate(path))))
 
 def ai_supercellerator_v1(game):
     width = game.get_width()
@@ -235,12 +252,14 @@ def ai_supercellerator_v1(game):
 
     goal = supercell(game.get_goal())
     if goal not in occupying:
-        occupying = update_path(width, height, occupying, goal)
+        snake = game.get_snake_position()
+        occupying = reduce_path(occupying, snake, goal)
+        assert_path_valid(width, height, occupying)
+        occupying = update_path(width, height, occupying, goal, snake[0])
+        assert_path_valid(width, height, occupying)
+        occupying = reduce_path(occupying, snake, goal)
+        assert_path_valid(width, height, occupying)
         game.set_ai_data(occupying)
-
-    occupying = reduce_path(occupying, game.get_snake_position(), goal)
-    assert_path_valid(width, height, occupying)
-    game.set_ai_data(occupying)
 
     head = game.get_snake_head()
     assert supercell(head) == occupying[0]
